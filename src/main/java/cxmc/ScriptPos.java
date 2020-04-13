@@ -1,0 +1,31 @@
+package cxmc;
+
+public class ScriptPos {
+    public int x,y,z;
+    ScriptPos(int x,int y,int z){
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+    @Override
+    public String toString(){
+        return this.x+","+this.y+","+this.z;
+    }
+    @Override
+    public final int hashCode(){
+        int hashcode = 17;
+        hashcode = hashcode * 31 + x;
+        hashcode = hashcode * 31 + y;
+        hashcode = hashcode * 31 + z;
+        return hashcode;
+    }
+    @Override
+    public boolean equals(Object object){
+        if(this == object) return true;
+        if(object instanceof ScriptPos){
+            ScriptPos other = (ScriptPos)object;
+            return this.x == other.x && this.y == other.y && this.z == other.z;
+        }
+        else return false;
+    }
+}
