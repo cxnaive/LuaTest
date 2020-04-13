@@ -1,10 +1,13 @@
 package cxmc;
 
 
+import java.util.Hashtable;
 import java.util.Scanner;
 
+import org.luaj.vm2.Globals;
 import org.luaj.vm2.LuaValue;
-//import org.luaj.vm2.lib.jse.CoerceJavaToLua;
+import org.luaj.vm2.lib.jse.JsePlatform;
+import org.luaj.vm2.lib.jse.CoerceJavaToLua;
 class LuaScript{
     public LuaLoader lualoader;
     public LuaRunner runner;
@@ -14,7 +17,7 @@ class LuaScript{
         lualoader = new LuaLoader(this);
         fileLoader = new FileLoader("script");
         runner = new LuaRunner();
-        h2Manager = new H2Manager("./H2", "luascript", "luascript");
+        h2Manager = new H2Manager("./H2/H2", "luascript", "luascript");
         h2Manager.TryConnect();
     }
     public void test(){
@@ -27,11 +30,16 @@ class LuaScript{
         runner.close();
     }
 }
+
 public class LuaTest{
     public static void main( String[] args ){
         LuaScript test = new LuaScript();
         test.init();
         test.test();
         test.end();
+        Globals globals = JsePlatform.standardGlobals();
+        globals.loadfile("script/test.lua").call();
+        LuaValue func = globals.get(LuaValue.valueOf("Run"));
+        func.call(CoerceJavaToLua.coerce(new Hashtable<String,Object>()));
     }
 }

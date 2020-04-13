@@ -1,178 +1,383 @@
 package cxmc;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.sql.Blob;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.HashMap;
 /*
-ID---script ID
-AMT---amount
-CLD---cooldown
-LET---last executed time
-DLY---delay execute
-CONTENT---real lua script content
-SID---script id 
+SID---script ID
+ID---area ID
+VARS---variables
 */
 public class H2Manager {
     private static final String DRIVER_CLASS = "org.h2.Driver";
     
     private static final String POS_STRING = "POS";
-    private static final String POS_STRUCT = "(X INT,Y INT,Z INT,SID varchar(255),AMT INT,CLD INT,LET BIGINT,DLY INT)";
-    private static final String POS_COLUMNS = "(X1,Y1,Z1,SID,AMT,CLD,LET,DLY)";
+    private static final String POS_STRUCT = "(X INT,Y INT,Z INT,SID VARCHAR(255),VARS BLOB)";
+    private static final String POS_COLUMNS = "(X,Y,Z,SID,VARS)";
 
     private static final String AREA_STRING = "AREA";
-    private static final String AREA_STRUCT = "(X1 INT,Y1 INT,Z1 INT,X2 INT,Y2 INT,Z2 INT,ID varchar(255),SID varchar(255),AMT INT,CLD INT,LET BIGINT,DLY INT)";
-    private static final String AREA_COLUMNS = "(X1,Y1,Z1,X2,Y2,Z2,ID,SID,AMT,CLD,LET,DLY)";
+    private static final String AREA_STRUCT = "(X1 INT,Y1 INT,Z1 INT,X2 INT,Y2 INT,Z2 INT,ID VARCHAR(255),SID VARCHAR(255),VARS BLOB)";
+    private static final String AREA_COLUMNS = "(X1,Y1,Z1,X2,Y2,Z2,ID,SID,VARS)";
 
     private static final String SCRIPT_STRING = "SCRIPT";
-    private static final String SCRIPT_STRUCT = "(SID varchar(255),CONTENT MEDIUMTEXT)";
+    private static final String SCRIPT_STRUCT = "(SID VARCHAR(255),CONTENT VARCHAR(65535))";
     private static final String SCRIPT_COLUMNS = "(SID,CONTENT)";
     
     private PreparedStatement PUT_SCRIPT,PUT_POS,PUT_AREA;
     private PreparedStatement HAS_POS,HAS_AREA,HAS_SCRIPT;
-    private PreparedStatement GET_POS_SCRIPT,GET_AREA_SCRIPT;
-    private String USER;
-    private String PASSWORD;
-    private String PATH;
+    private PreparedStatement GET_POS_SCRIPT,GET_POS_SCRIPTID,GET_AREA_SCRIPTID,GET_AREA_SCRIPT,GET_POS_VARS,GET_AREA_VARS,GET_AREA_AABB;
+    private PreparedStatement UPD_SCRIPT,UPD_POS_VAR,UPD_AREA_VAR,UPD_POS,UPD_AREA;
+    private PreparedStatement DEL_SCRIPT,DEL_POS,DEL_AREA;
+    private final String USER;
+    private final String PASSWORD;
+    private final String PATH;
     Connection conn;
-    public H2Manager(String path,String username,String password){
+
+    public H2Manager(final String path, final String username, final String password) {
         this.PATH = path;
         this.PASSWORD = password;
         this.USER = username;
     }
-    public boolean TryConnect(){
-        String JDBC_URL = "jdbc:h2:"+this.PATH+";AUTO_RECONNECT=TRUE";
-        try{
+
+    public boolean TryConnect() {
+        final String JDBC_URL = "jdbc:h2:" + this.PATH + ";AUTO_RECONNECT=TRUE";
+        try {
             Class.forName(DRIVER_CLASS);
             conn = DriverManager.getConnection(JDBC_URL, this.USER, this.PASSWORD);
-            Statement statement = conn.createStatement();
-            statement.execute("CREATE TABLE IF NOT EXISTS "+POS_STRING+POS_STRUCT);
-            statement.execute("CREATE TABLE IF NOT EXISTS "+AREA_STRING+AREA_STRUCT);
-            statement.execute("CREATE TABLE IF NOT EXISTS "+SCRIPT_STRING+SCRIPT_STRUCT);
+            final Statement statement = conn.createStatement();
+            statement.execute("CREATE TABLE IF NOT EXISTS " + POS_STRING + POS_STRUCT);
+            statement.execute("CREATE TABLE IF NOT EXISTS " + AREA_STRING + AREA_STRUCT);
+            statement.execute("CREATE TABLE IF NOT EXISTS " + SCRIPT_STRING + SCRIPT_STRUCT);
             statement.close();
-            PUT_SCRIPT = conn.prepareStatement("INSERT INTO "+SCRIPT_STRING+SCRIPT_COLUMNS+" VALUES(?,?)");
-            PUT_POS = conn.prepareStatement("INSERT INTO "+POS_STRING+POS_COLUMNS+" VALUES(?,?,?,?,?,?,?,?)");
-            PUT_AREA = conn.prepareStatement("INSERT INTO "+AREA_STRING+AREA_COLUMNS+" VALUES(?,?,?,?,?,?,?,?,?,?,?,?)");
-            HAS_POS = conn.prepareStatement("SELECT COUNT(*) FROM "+POS_STRING+" WHERE X = ? and Y = ? and Z = ? ");
-            HAS_AREA = conn.prepareStatement("SELECT COUNT(*) FROM "+AREA_STRING+" WHERE ID = ?");
-            HAS_SCRIPT = conn.prepareStatement("SELECT COUNT(*) FROM "+SCRIPT_STRING+" WHERE SID = ?");
-            GET_POS_SCRIPT = conn.prepareStatement("SELECT CONTENT FROM "+SCRIPT_STRING+" WHERE SID IN (SELECT SID FROM "+POS_STRING+" WHERE X = ? and Y = ? and Z = ?)");
-            GET_AREA_SCRIPT = conn.prepareStatement("SELECT CONTENT FROM "+SCRIPT_STRING+" WHERE SID IN (SELECT SID FROM "+AREA_STRING+" WHERE ID = ?)");
+            PUT_SCRIPT = conn.prepareStatement("INSERT INTO " + SCRIPT_STRING + SCRIPT_COLUMNS + " VALUES(?,?)");
+            PUT_POS = conn.prepareStatement("INSERT INTO " + POS_STRING + POS_COLUMNS + " VALUES(?,?,?,?,?)");
+            PUT_AREA = conn
+                    .prepareStatement("INSERT INTO " + AREA_STRING + AREA_COLUMNS + " VALUES(?,?,?,?,?,?,?,?,?)");
+
+            HAS_POS = conn.prepareStatement("SELECT COUNT(*) FROM " + POS_STRING + " WHERE X = ? AND Y = ? AND Z = ? ");
+            HAS_AREA = conn.prepareStatement("SELECT COUNT(*) FROM " + AREA_STRING + " WHERE ID = ?");
+            HAS_SCRIPT = conn.prepareStatement("SELECT COUNT(*) FROM " + SCRIPT_STRING + " WHERE SID = ?");
+            
+            GET_POS_SCRIPT = conn.prepareStatement("SELECT CONTENT FROM " + SCRIPT_STRING 
+                    + " WHERE SID IN (SELECT SID FROM " + POS_STRING + " WHERE X = ? AND Y = ? AND Z = ?)");
+            GET_AREA_SCRIPT = conn.prepareStatement("SELECT CONTENT FROM " + SCRIPT_STRING
+                    + " WHERE SID IN (SELECT SID FROM " + AREA_STRING + " WHERE ID = ?)");
+            GET_POS_SCRIPTID = conn.prepareStatement("SELECT SID FROM "+POS_STRING+" WHERE X = ? AND Y = ? AND Z = ?");
+            GET_AREA_SCRIPTID = conn.prepareStatement("SELECT SID FROM "+AREA_STRING+" WHERE ID = ?");
+            GET_POS_VARS = conn.prepareStatement("SELECT VARS FROM "+POS_STRING+" WHERE X = ? AND Y = ? AND Z = ?");
+            GET_AREA_VARS = conn.prepareStatement("SELECT VARS FROM "+AREA_STRING+" WHERE ID = ?");
+            GET_AREA_AABB = conn.prepareStatement("SELECT X1,Y1,Z1,X2,Y2,Z2 FROM "+AREA_STRING+" WHERE ID = ?");
+            
+            UPD_SCRIPT = conn.prepareStatement("UPDATE " + SCRIPT_STRING + " SET CONTENT = ? WHERE SID = ?");
+            UPD_POS_VAR = conn.prepareStatement(
+                    "UPDATE " + POS_STRING + " SET VARS = ? WHERE X = ? AND Y = ? AND Z = ?");
+            UPD_AREA_VAR = conn
+                    .prepareStatement("UPDATE " + AREA_STRING + " SET VARS = ? WHERE ID = ?");
+            UPD_POS = conn.prepareStatement("UPDATE "+ POS_STRING + " SET SID = ?,VARS = ? WHERE X = ? AND Y = ? AND Z = ?");
+            UPD_AREA = conn.prepareStatement("UPDATE " + AREA_STRING + " SET SID = ?,VARS = ? WHERE ID = ?");
+            
+            DEL_SCRIPT = conn.prepareStatement("DELETE FROM "+POS_STRING+" WHERE SID = ?;"+"DELETE FROM "+AREA_STRING+" WHERE SID = ?;"+"DELETE FROM "+SCRIPT_STRING+" WHERE SID = ?");
+            DEL_POS = conn.prepareStatement("DELETE FROM "+POS_STRING+" WHERE X = ? AND Y = ? AND Z = ?");
+            DEL_AREA = conn.prepareStatement("DELETE FROM "+AREA_STRING+" WHERE ID = ?");
+            
             return true;
-        }catch(Exception ex){
+        } catch (final Exception ex) {
             System.out.println(ex.getMessage());
             return false;
         }
     }
-    public void CloseConnect(){
-        try{
+
+    public void CloseConnect() {
+        try {
             PUT_SCRIPT.close();
             PUT_POS.close();
             PUT_AREA.close();
+
+            HAS_SCRIPT.close();
             HAS_POS.close();
             HAS_AREA.close();
+
             GET_POS_SCRIPT.close();
             GET_AREA_SCRIPT.close();
+            GET_POS_SCRIPTID.close();
+            GET_AREA_SCRIPTID.close();
+            GET_POS_VARS.close();
+            GET_AREA_VARS.close();
+            GET_AREA_AABB.close();
+
+            UPD_SCRIPT.close();
+            UPD_POS_VAR.close();
+            UPD_AREA_VAR.close();
+            UPD_POS.close();
+            UPD_AREA.close();
+
+            DEL_SCRIPT.close();
+            DEL_POS.close();
+            DEL_AREA.close();
+            
             conn.close();
-        }catch(Exception ex){
+        } catch (final Exception ex) {
             System.out.println(ex.getMessage());
         }
     }
-    public boolean HasPos(ScriptPos pos){
+
+    public boolean DeleteScript(final String ScriptID){
         try{
+            DEL_SCRIPT.setString(1, ScriptID);
+            DEL_SCRIPT.setString(2, ScriptID);
+            DEL_SCRIPT.setString(3, ScriptID);
+            DEL_SCRIPT.executeUpdate();
+            return true;
+        } catch (final Exception ex){
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean DeletePos(final ScriptPos pos){
+        try {
+            DEL_POS.setInt(1, pos.x);
+            DEL_POS.setInt(2, pos.y);
+            DEL_POS.setInt(3, pos.z);
+            DEL_POS.executeUpdate();
+            return true;
+        } catch (final Exception ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean DeleteArea(final String AreaID){
+        try {
+            DEL_AREA.setString(1, AreaID);
+            DEL_AREA.executeUpdate();
+            return true;
+        } catch (final Exception ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean HasScript(final String ScriptID) {
+        try {
+            HAS_AREA.setString(1, ScriptID);
+            final ResultSet result = HAS_SCRIPT.executeQuery();
+            result.next();
+            final int cnt = result.getInt(1);
+            return cnt == 1;
+        } catch (final Exception ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean HasPos(final ScriptPos pos) {
+        try {
             HAS_POS.setInt(1, pos.x);
             HAS_POS.setInt(2, pos.y);
             HAS_POS.setInt(3, pos.z);
-            ResultSet result = HAS_POS.executeQuery();
+            final ResultSet result = HAS_POS.executeQuery();
             result.next();
-            int cnt = result.getInt(0);
+            final int cnt = result.getInt(1);
             return cnt == 1;
-        } catch(Exception ex){
+        } catch (final Exception ex) {
             ex.printStackTrace();
             return false;
         }
     }
-    public boolean HasArea(String AreaID){
-        try{
+
+    public boolean HasArea(final String AreaID) {
+        try {
             HAS_AREA.setString(1, AreaID);
-            ResultSet result = HAS_AREA.executeQuery();
+            final ResultSet result = HAS_AREA.executeQuery();
             result.next();
-            int cnt = result.getInt(0);
+            final int cnt = result.getInt(1);
             return cnt == 1;
-        } catch(Exception ex){
+        } catch (final Exception ex) {
             ex.printStackTrace();
             return false;
         }
     }
-    public String GetPosScript(ScriptPos pos){
-        try{
+
+    public String GetPosScript(final ScriptPos pos) {
+        try {
             GET_POS_SCRIPT.setInt(1, pos.x);
             GET_POS_SCRIPT.setInt(2, pos.y);
             GET_POS_SCRIPT.setInt(3, pos.z);
-            ResultSet result = GET_POS_SCRIPT.executeQuery();
+            final ResultSet result = GET_POS_SCRIPT.executeQuery();
             result.next();
-            String now = result.getString(0);
+            final String now = result.getString(1);
             return now;
-        } catch(Exception ex){
+        } catch (final Exception ex) {
             ex.printStackTrace();
             return null;
         }
     }
-    public String GetAreaScript(String AreaID){
-        try{
+
+    public String GetAreaScript(final String AreaID) {
+        try {
             GET_AREA_SCRIPT.setString(1, AreaID);
-            ResultSet result = GET_AREA_SCRIPT.executeQuery();
+            final ResultSet result = GET_AREA_SCRIPT.executeQuery();
             result.next();
-            String now = result.getString(0);
+            final String now = result.getString(1);
             return now;
-        } catch(Exception ex){
+        } catch (final Exception ex) {
             ex.printStackTrace();
             return null;
         }
     }
-    public boolean HasScript(String ScriptID){
-        try{
-            HAS_AREA.setString(1, ScriptID);
-            ResultSet result = HAS_SCRIPT.executeQuery();
+
+    private HashMap<String,Object> Blob2Map(Blob inBlob) throws Exception{
+        InputStream is = inBlob.getBinaryStream();
+        BufferedInputStream bis = new BufferedInputStream(is);
+        byte[] buff = new byte[(int) inBlob.length()];
+        bis.read(buff, 0, buff.length);
+        ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(buff));
+        return (HashMap<String,Object>)in.readObject();
+    }
+    
+    public HashMap<String,Object> GetPosVars(final ScriptPos pos) {
+        try {
+            GET_POS_VARS.setInt(1, pos.x);
+            GET_POS_VARS.setInt(2, pos.y);
+            GET_POS_VARS.setInt(3, pos.z);
+            final ResultSet result = GET_POS_SCRIPT.executeQuery();
             result.next();
-            int cnt = result.getInt(0);
-            return cnt == 1;
+            return Blob2Map(result.getBlob(1));
+        } catch (final Exception ex) {
+            ex.printStackTrace();
+            return null;
+        }
+    }
+
+    public HashMap<String,Object> GetAreaVars(final String AreaID) {
+        try {
+            GET_AREA_VARS.setString(1, AreaID);
+            final ResultSet result = GET_AREA_SCRIPT.executeQuery();
+            result.next();
+            return Blob2Map(result.getBlob(1));
+        } catch (final Exception ex) {
+            ex.printStackTrace();
+            return null;
+        }
+    }
+
+    public Pair<ScriptPos,ScriptPos> GetAreaAABB(final String AreaID){
+        try{
+            GET_AREA_AABB.setString(1, AreaID);
+            ResultSet result = GET_AREA_AABB.executeQuery();
+            result.next();
+            return new Pair<ScriptPos,ScriptPos>(new ScriptPos(result.getInt(1), result.getInt(2), result.getInt(3)),new ScriptPos(result.getInt(4), result.getInt(5), result.getInt(6)));
+        }catch(Exception ex){
+            ex.printStackTrace();
+            return null;
+        }
+    }
+
+    public boolean UpdatePos(final ScriptPos pos,final String ScriptID, final HashMap<String,Object> values){
+        try{
+            UPD_POS.setString(1, ScriptID);
+            UPD_POS.setObject(2, values);
+            UPD_POS.setInt(3, pos.x);
+            UPD_POS.setInt(4, pos.y);
+            UPD_POS.setInt(5, pos.z);
+            UPD_POS.executeUpdate();
+            return true;
         } catch(Exception ex){
             ex.printStackTrace();
             return false;
         }
     }
-    public boolean PutScript(String ScriptID,String Content){
+
+    public boolean UpdateArea(final String AreaID,final String ScriptID, final HashMap<String,Object> values){
         try{
+            UPD_POS.setString(1, ScriptID);
+            UPD_POS.setObject(2, values);
+            UPD_POS.setString(3, AreaID);
+            UPD_POS.executeUpdate();
+            return true;
+        } catch(Exception ex){
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean UpdateScript(final String ScriptID, final String Content) {
+        try {
+            UPD_SCRIPT.setString(1, Content);
+            UPD_SCRIPT.setString(2, ScriptID);
+            UPD_SCRIPT.executeUpdate();
+            return true;
+        } catch (final Exception ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean UpdatePosVars(final ScriptPos pos, final HashMap<String,Object> values) {
+        try {
+            UPD_POS_VAR.setObject(1, values);
+            UPD_POS_VAR.setInt(5, pos.x);
+            UPD_POS_VAR.setInt(6, pos.y);
+            UPD_POS_VAR.setInt(7, pos.z);
+            UPD_POS_VAR.executeUpdate();
+            return true;
+        } catch (final Exception ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean UpdateAreaVars(final String AreaID, final HashMap<String,Object> values) {
+        try {
+            UPD_AREA_VAR.setObject(1, values);
+            UPD_AREA_VAR.setString(2, AreaID);
+            UPD_AREA_VAR.executeUpdate();
+            return true;
+        } catch (final Exception ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean PutScript(final String ScriptID, final String Content) {
+        try {
             PUT_SCRIPT.setString(1, ScriptID);
             PUT_SCRIPT.setString(2, Content);
             PUT_SCRIPT.executeUpdate();
             return true;
-        } catch(Exception ex){
+        } catch (final Exception ex) {
             ex.printStackTrace();
             return false;
         }
     }
-    public boolean PutPos(ScriptPos pos,String ScriptID,ScriptValues values){
-        try{
+
+    public boolean PutPos(final ScriptPos pos, final String ScriptID, final HashMap<String,Object> values) {
+        try {
             PUT_POS.setInt(1, pos.x);
             PUT_POS.setInt(2, pos.y);
             PUT_POS.setInt(3, pos.z);
             PUT_POS.setString(4, ScriptID);
-            PUT_POS.setInt(5, values.amount);
-            PUT_POS.setInt(6, values.cooldown);
-            PUT_POS.setLong(7, values.last_executed_time);
-            PUT_POS.setInt(8, values.delay);
+            PUT_POS.setObject(5, values);
             PUT_POS.executeUpdate();
             return true;
-        } catch(Exception ex){
+        } catch (final Exception ex) {
             ex.printStackTrace();
             return false;
         }
     }
-    public boolean PutArea(ScriptPos pos1,ScriptPos pos2,String AreaID,String ScriptID,ScriptValues values){
-        try{
+
+    public boolean PutArea(final ScriptPos pos1, final ScriptPos pos2, final String AreaID, final String ScriptID,
+            final HashMap<String,Object> values) {
+        try {
             PUT_AREA.setInt(1, pos1.x);
             PUT_AREA.setInt(2, pos1.y);
             PUT_AREA.setInt(3, pos1.z);
@@ -181,13 +386,10 @@ public class H2Manager {
             PUT_AREA.setInt(6, pos2.z);
             PUT_AREA.setString(7, AreaID);
             PUT_POS.setString(8, ScriptID);
-            PUT_POS.setInt(9, values.amount);
-            PUT_POS.setInt(10, values.cooldown);
-            PUT_POS.setLong(11, values.last_executed_time);
-            PUT_POS.setInt(12, values.delay);
+            PUT_POS.setObject(9, values);
             PUT_POS.executeUpdate();
             return true;
-        } catch(Exception ex){
+        } catch (final Exception ex) {
             ex.printStackTrace();
             return false;
         }
