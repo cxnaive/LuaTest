@@ -2,11 +2,11 @@ package cxmc;
 
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Scanner;
 
 import org.luaj.vm2.Globals;
 import org.luaj.vm2.LuaValue;
-import org.luaj.vm2.lib.jse.JsePlatform;
 import org.luaj.vm2.lib.jse.CoerceJavaToLua;
 class LuaScript{
     public LuaLoader lualoader;
@@ -23,28 +23,58 @@ class LuaScript{
     public void test(){
         Scanner sc = new Scanner(System.in);
         while(true){
-            String op = sc.next();
-            op = op.toLowerCase();
+            String op = sc.next().toLowerCase();
             if(op.equals("load")){
                 String ScriptID = sc.next();
                 String filename = sc.next();
                 String Content = fileLoader.ReadScript(filename);
-                lualoader.SetScript(ScriptID, Content);
+                boolean result = lualoader.SetScript(ScriptID, Content);
+                if(!result) System.out.println("loadscript failed!");
             }
             if(op.equals("bindpos")){
                 int x = sc.nextInt(),y = sc.nextInt(),z = sc.nextInt();
                 ScriptPos nowpos = new ScriptPos(x, y, z);
                 String ScriptID = sc.next();
-                lualoader.SetPos(nowpos, ScriptID, new HashMap<>());
+                boolean result =  lualoader.SetPos(nowpos, ScriptID, new HashMap<>());
+                if(!result) System.out.println("bindpos failed!");
             }
             if(op.equals("runpos")){
                 int x = sc.nextInt(),y = sc.nextInt(),z = sc.nextInt();
                 String funcID = sc.next();
                 ScriptPos nowpos = new ScriptPos(x, y, z);
                 Globals script = lualoader.GetScript(nowpos);
+                if(script == null){
+                    System.out.println("reading pos script failed!");
+                    continue;
+                }
                 HashMap<String,Object> now = lualoader.GetVars(nowpos);
+                if(now == null){
+                    System.out.println("reading pos vars failed!");
+                    continue;
+                }
                 LuaValue[] args = {CoerceJavaToLua.coerce(now)};
                 runner.runFunc(script, nowpos.toString(), funcID, args);
+            }
+            if(op.equals("show")){
+                String op1 = sc.next().toLowerCase();
+                if(op1.equals("pos")){
+                    List<Pair<ScriptPos,String>> now = lualoader.GetPosALL();
+                    for(Pair<ScriptPos,String> posv:now){
+                        System.out.println(posv.getKey().toString()+":"+posv.getValue());
+                    }
+                }
+                else if(op1.equals("script")){
+                    List<String> now = lualoader.GetScriptIDALL();
+                    for(String sid:now){
+                        System.out.println(sid);
+                    }
+                }
+                else if(op1.equals("area")){
+                    List<Pair<String,String>> now = lualoader.GetAreaALL();
+                    for(Pair<String,String> areav:now){
+                        System.out.println(areav.getKey().toString()+":"+areav.getValue());
+                    }
+                }
             }
             if(op.equals("close")){
                 break;

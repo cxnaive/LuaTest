@@ -368,12 +368,13 @@ public class H2Manager {
         }
     }
 
-    public List<ScriptPos> GetPosALL(){
+    public List<Pair<ScriptPos,String>> GetPosALL(){
         try{
             ResultSet result = GET_POS_ALL.executeQuery();
-            List<ScriptPos> now = new ArrayList<>();
+            List<Pair<ScriptPos,String>> now = new ArrayList<>();
             while(result.next()){
-                now.add(new ScriptPos(result.getInt(1), result.getInt(2), result.getInt(3)));
+                ScriptPos npos = new ScriptPos(result.getInt(1), result.getInt(2), result.getInt(3));
+                now.add(new Pair<ScriptPos,String>(npos,result.getString(4)));
             }
             return now;
         } catch (Exception ex){
@@ -382,12 +383,12 @@ public class H2Manager {
         }
     }
 
-    public List<String> GetAreaALL(){
+    public List<Pair<String,String>> GetAreaALL(){
         try{
             ResultSet result = GET_AREA_ALL.executeQuery();
-            List<String> now = new ArrayList<>();
+            List<Pair<String,String>> now = new ArrayList<>();
             while(result.next()){
-                now.add(result.getString(1));
+                now.add(new Pair<String,String>(result.getString(1),result.getString(2)));
             }
             return now;
         } catch (Exception ex){

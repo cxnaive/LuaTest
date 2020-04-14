@@ -41,7 +41,7 @@ public class LuaLoader {
             script.load(luastr,"@"+pos.toString(),script).call();
             StoredScripts.put(pos.toString(), script);
             return script;
-        } catch(LuaError e){
+        } catch(Exception e){
             e.printStackTrace();
             return null;
         }
@@ -54,7 +54,7 @@ public class LuaLoader {
             script.load(luastr,"@"+AreaID,script).call();
             StoredScripts.put(AreaID, script);
             return script;
-        } catch(LuaError e){
+        } catch(Exception e){
             e.printStackTrace();
             return null;
         }
@@ -65,13 +65,13 @@ public class LuaLoader {
     public List<ScriptPos> GetPosBySID(String SID){
         return instance.h2Manager.GetPosBySID(SID);
     }
-    public List<String> GetAreaALL(){
+    public List<Pair<String,String>> GetAreaALL(){
         return instance.h2Manager.GetAreaALL();
     }
-    public List<ScriptPos> GetPosALL(){
+    public List<Pair<ScriptPos,String>> GetPosALL(){
         return instance.h2Manager.GetPosALL();
     }
-    public List<String> GetSIDALL(){
+    public List<String> GetScriptIDALL(){
         return instance.h2Manager.GetSIDALL();
     }
     public String GetPosSID(ScriptPos pos){
@@ -103,23 +103,25 @@ public class LuaLoader {
     public Pair<ScriptPos,ScriptPos> GetAABB(String AreaID){
         return instance.h2Manager.GetAreaAABB(AreaID);
     }
-    public void SetScript(String ScriptID,String Content){
+    public boolean SetScript(String ScriptID,String Content){
         if(instance.h2Manager.HasScript(ScriptID)){
             instance.h2Manager.UpdateScript(ScriptID, Content);
             List<ScriptPos> AffectedPoses = GetPosBySID(ScriptID);
             List<String> AffectedAreas = GetAreaBySID(ScriptID);
             RefreshScriptArea(AffectedAreas);
             RefreshScriptPos(AffectedPoses);
+            return true;
         }
-        else instance.h2Manager.PutScript(ScriptID, Content);
+        else return instance.h2Manager.PutScript(ScriptID, Content);
     }
-    public void SetPos(ScriptPos pos,String ScriptID,HashMap<String,Object> values){
+    public boolean SetPos(ScriptPos pos,String ScriptID,HashMap<String,Object> values){
         if(instance.h2Manager.HasPos(pos)){
             instance.h2Manager.UpdatePos(pos, ScriptID, values);
             RefreshScriptPos(pos);
             RefreshVarsPos(pos);
+            return true;
         }
-        else instance.h2Manager.PutPos(pos, ScriptID, values);
+        else return instance.h2Manager.PutPos(pos, ScriptID, values);
     }
 
     public boolean SetPosVars(ScriptPos pos,HashMap<String,Object> values){
