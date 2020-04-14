@@ -9,7 +9,7 @@ public class ScriptPos {
     }
     @Override
     public String toString(){
-        return this.x+","+this.y+","+this.z;
+        return "P:"+this.x+","+this.y+","+this.z;
     }
     @Override
     public final int hashCode(){
@@ -27,5 +27,9 @@ public class ScriptPos {
             return this.x == other.x && this.y == other.y && this.z == other.z;
         }
         else return false;
+    }
+    public static ScriptPos BuildFromStr(String str){
+        String[] vars = str.substring(2).split(",");
+        return new ScriptPos(Integer.parseInt(vars[0]),Integer.parseInt(vars[1]),Integer.parseInt(vars[2]));
     }
 }
