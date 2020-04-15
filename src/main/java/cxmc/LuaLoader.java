@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map.Entry;
 
 import org.luaj.vm2.Globals;
-import org.luaj.vm2.LuaError;
 import org.luaj.vm2.lib.jse.JsePlatform;
 
 public class LuaLoader {
@@ -38,6 +37,7 @@ public class LuaLoader {
         try{
             String luastr = instance.h2Manager.GetPosScript(pos);
             script.load(new LuaDebugLib());
+            script.load(new ScriptMcLib());
             script.load(luastr,"@"+pos.toString(),script).call();
             StoredScripts.put(pos.toString(), script);
             return script;
@@ -51,6 +51,7 @@ public class LuaLoader {
         try{
             String luastr = instance.h2Manager.GetAreaScript(AreaID);
             script.load(new LuaDebugLib());
+            script.load(new ScriptMcLib());
             script.load(luastr,"@"+AreaID,script).call();
             StoredScripts.put(AreaID, script);
             return script;
