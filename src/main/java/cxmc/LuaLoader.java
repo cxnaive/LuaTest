@@ -60,6 +60,9 @@ public class LuaLoader {
             return null;
         }
     }
+    public String GetScriptContent(String SID){
+        return instance.h2Manager.GetScriptBySID(SID);
+    }
     public List<String> GetAreaBySID(String SID){
         return instance.h2Manager.GetAreaBySID(SID);
     }
